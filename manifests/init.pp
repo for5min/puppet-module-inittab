@@ -1,50 +1,73 @@
-# ## Class: inittab ##
+# == Class: inittab
 #
 # Manage inittab
 #
-# ### Parameters ###
-#
-# default_runlevel
-# ----------------
-# String for default runlevel
-#
-# - *Default*: 3
-#
 class inittab (
   $default_runlevel = 'USE_DEFAULTS',
+  $ensure_ttys1     = undef,
+  $file_mode        = '0644',
 ) {
 
+  if $ensure_ttys1 {
+    validate_re($ensure_ttys1,'^(present)|(absent)$',"inittab::ensure_ttys1 is ${ensure_ttys1} and if defined must be \'present\' or \'absent\'.")
+  }
+
+  validate_re($file_mode, '^[0-7]{4}$',
+    "inittab::file_mode is <${file_mode}> and must be a valid four digit mode in octal notation.")
+
   case $::osfamily {
-    'Redhat': {
-      case $::lsbmajdistrelease {
-        '5': {
+    'RedHat': {
+      case $::operatingsystemrelease {
+        /^5/: {
           $default_default_runlevel = 3
           $template                 = 'inittab/el5.erb'
         }
-        '6': {
+        /^6/: {
           $default_default_runlevel = 3
           $template                 = 'inittab/el6.erb'
+
+          if $ensure_ttys1 {
+            file { 'ttys1_conf':
+              ensure => $ensure_ttys1,
+              path   => '/etc/init/ttyS1.conf',
+              source => 'puppet:///modules/inittab/ttyS1.conf',
+              owner  => 'root',
+              group  => 'root',
+              mode   => '0644',
+            }
+          }
+
+          if $ensure_ttys1 == 'present' {
+            service { 'ttyS1':
+              ensure     => running,
+              hasstatus  => false,
+              hasrestart => false,
+              start      => '/sbin/initctl start ttyS1',
+              stop       => '/sbin/initctl stop ttyS1',
+              status     => '/sbin/initctl status ttyS1 | grep ^"ttyS1 start/running" 1>/dev/null 2>&1',
+              require    => File['ttys1_conf'],
+            }
+          }
         }
         default: {
-          fail("lsbmajdistrelease is <${::lsbmajdistrelease}> and inittab supports versions 5 and 6.")
+          fail("operatingsystemrelease is <${::operatingsystemrelease}> and inittab supports RedHat versions 5 and 6.")
         }
       }
     }
     'Debian': {
-      if $::lsbdistid == 'Ubuntu' {
+      if $::operatingsystem == 'Ubuntu' {
 
         $default_default_runlevel = 3
-        $template                 = undef
-        include inittab::ubuntu
+        $template                 = 'inittab/ubuntu.erb'
 
       } else {
-        case $::lsbmajdistrelease {
+        case $::operatingsystemmajrelease {
           '6': {
             $default_default_runlevel = 2
             $template                 = 'inittab/debian6.erb'
           }
           default: {
-            fail("lsbmajdistrelease is <${::lsbmajdistrelease}> and inittab supports version 6.")
+            fail("operatingsystemmajrelease is <${::operatingsystemmajrelease}> and inittab supports Debian version 6.")
           }
         }
       }
@@ -60,18 +83,22 @@ class inittab (
           $template                 = 'inittab/sol11.erb'
         }
         default: {
-          fail("kernelrelease is <${::kernelrelease}> and inittab supports versions 5.10 and 5.11.")
+          fail("kernelrelease is <${::kernelrelease}> and inittab supports Solaris versions 5.10 and 5.11.")
         }
       }
     }
     'Suse':{
-      case $::lsbmajdistrelease {
-        '11': {
+      case $::operatingsystemrelease {
+        /^10/: {
+          $default_default_runlevel = 3
+          $template                 = 'inittab/suse10.erb'
+        }
+        /^11/: {
           $default_default_runlevel = 3
           $template                 = 'inittab/suse11.erb'
         }
         default: {
-          fail("lsbmajdistrelease is <${::lsbmajdistrelease}> and inittab supports version 11.")
+          fail("operatingsystemrelease is <${::operatingsystemrelease}> and inittab supports Suse versions 10 and 11.")
         }
       }
     }
@@ -89,18 +116,23 @@ class inittab (
   # validate default_runlevel_real
   validate_re($default_runlevel_real, '^[0-6sS]$', "default_runlevel <${default_runlevel_real}> does not match regex")
 
-  if $template {
-    $content = template($template)
+  if $::operatingsystem == 'Ubuntu' {
+    file { 'rc-sysinit.override':
+      ensure  => file,
+      path    => '/etc/init/rc-sysinit.override',
+      content => template($template),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+    }
   } else {
-    $content = undef
-  }
-
-  file { 'inittab':
-    ensure  => file,
-    path    => '/etc/inittab',
-    content => $content,
-    owner   => 'root',
-    group   => 'root',
-    mode    => '0644',
+    file { 'inittab':
+      ensure  => file,
+      path    => '/etc/inittab',
+      content => template($template),
+      owner   => 'root',
+      group   => 'root',
+      mode    => $file_mode,
+    }
   }
 }

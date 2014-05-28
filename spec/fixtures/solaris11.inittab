@@ -1,7 +1,7 @@
 # This file is being maintained by Puppet.
 # DO NOT EDIT
 #
-# Template for Solaris 10
+# Template for Solaris 11
 #
 # Copyright 2004 Sun Microsystems, Inc.  All rights reserved.
 # Use is subject to license terms.
@@ -25,4 +25,5 @@
 ap::sysinit:/sbin/autopush -f /etc/iu.ap
 sp::sysinit:/sbin/soconfig -f /etc/sock2path
 smf::sysinit:/lib/svc/bin/svc.startd    >/dev/msglog 2<>/dev/msglog </dev/console
-p<%= @default_runlevel_real %>:s1234:powerfail:/usr/sbin/shutdown -y -i5 -g0 >/dev/msglog 2<>/dev/msglog
+p3:s1234:powerfail:/usr/sbin/shutdown -y -i5 -g0 >/dev/msglog 2<>/dev/msglog
+pt:s1234:powerfail:/lib/svc/method/installupdates lock
